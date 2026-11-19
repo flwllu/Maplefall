@@ -1,5 +1,5 @@
 {
-  "productName": "枫落工具",
+  "productName": "Maplefall",
   "version": "0.1.0",
   "identifier": "com.whisperstudio.desktop",
   "build": {
@@ -9,7 +9,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "枫落工具",
+        "title": "Maplefall",
         "width": 980,
         "height": 740,
         "minWidth": 720,
@@ -32,7 +32,8 @@
     "active": true,
     "targets": ["dmg", "app"],
     "macOS": {
-      "minimumSystemVersion": "13.4"
+      "minimumSystemVersion": "13.4",
+      "signingIdentity": "-"
     },
     "icon": ["icons/icon.icns"],
     "resources": [

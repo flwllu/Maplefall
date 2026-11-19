@@ -12,6 +12,7 @@ FULL_RESOURCES='[
   "resources/models/*.bin",
   "resources/models/*.onnx",
   "resources/models/*.mlmodelc/**/*",
+  "resources/models/README.md",
   "resources/bin/ffmpeg/*",
   "resources/licenses/*"
 ]'
@@ -20,6 +21,7 @@ SLIM_RESOURCES='[
   "resources/bin/whisper_cpp/whisper-cli",
   "resources/models/*.bin",
   "resources/models/*.onnx",
+  "resources/models/README.md",
   "resources/bin/ffmpeg/*",
   "resources/licenses/*"
 ]'
