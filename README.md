@@ -6,6 +6,8 @@ It also ships an MCP server, so agents and scripts can drive transcription and s
 
 **English** · [<u>简体中文</u>](README.zh.md)
 
+![Maplefall](assets/screenshot.png)
+
 ## Features
 
 **Format conversion**
