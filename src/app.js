@@ -975,7 +975,11 @@ const textOf = (id) => $(id).value.trim() || null;
 
 function setOptions(id, options) {
   $(id).innerHTML = options
-    .map((o) => `<option value="${escapeHtml(String(o.value))}">${escapeHtml(o.label)}</option>`)
+    .map((o) => {
+      // 带 key 的选项写出 data-i18n，切换语言时由 I18N.apply 重新翻译
+      const attr = o.key ? ` data-i18n="${escapeHtml(o.key)}"` : "";
+      return `<option value="${escapeHtml(String(o.value))}"${attr}>${escapeHtml(o.label)}</option>`;
+    })
     .join("");
 }
 
@@ -1235,13 +1239,13 @@ async function loadFfmpegSupport() {
   if (caps && !caps.error) {
     ffcaps = caps;
     setOptions("convertVideo", encoderOptions("video", [
-      { value: "", label: tr("common.keep") },
-      { value: "copy", label: tr("common.copy_stream") },
+      { value: "", key: "common.keep", label: tr("common.keep") },
+      { value: "copy", key: "common.copy_stream", label: tr("common.copy_stream") },
     ]));
     setOptions("convertAudio", encoderOptions("audio", [
-      { value: "", label: tr("common.keep") },
-      { value: "copy", label: tr("common.copy_stream") },
-      { value: "none", label: tr("convert.remove_audio") },
+      { value: "", key: "common.keep", label: tr("common.keep") },
+      { value: "copy", key: "common.copy_stream", label: tr("common.copy_stream") },
+      { value: "none", key: "convert.remove_audio", label: tr("convert.remove_audio") },
     ]));
     // 主界面只放常见容器，完整列表留给高级参数
     const curatedFormats = [
@@ -1264,34 +1268,34 @@ async function loadFfmpegSupport() {
       ? curatedFormats.filter(([value]) => available.has(value))
       : curatedFormats;
     setOptions("convertFormat", [
-      { value: "", label: tr("convert.keep_ext") },
+      { value: "", key: "convert.keep_ext", label: tr("convert.keep_ext") },
       ...common.map(([value, label]) => ({ value, label })),
     ]);
     setOptions("convertFormatAdvanced", [
-      { value: "", label: tr("convert.same_as_target") },
+      { value: "", key: "convert.same_as_target", label: tr("convert.same_as_target") },
       ...muxers.map((f) => ({
         value: f.names[0],
         label: `${f.names.join(" / ")} · ${shortLabel(f.description || "")}`.trim(),
       })),
     ]);
     setOptions("convertPixFmt", [
-      { value: "", label: tr("common.auto") },
+      { value: "", key: "common.auto", label: tr("common.auto") },
       ...(caps.pixel_formats || []).map((name) => ({ value: name, label: name })),
     ]);
     setOptions("convertVpreset", [
-      { value: "", label: tr("convert.q_encoder") },
+      { value: "", key: "convert.q_encoder", label: tr("convert.q_encoder") },
       ...(caps.presets || []).map((name) => ({ value: name, label: name })),
     ]);
     setOptions("convertTune", [
-      { value: "", label: tr("common.none") },
+      { value: "", key: "common.none", label: tr("common.none") },
       ...(caps.tunes || []).map((name) => ({ value: name, label: name })),
     ]);
     setOptions("convertProfile", [
-      { value: "", label: tr("common.auto") },
+      { value: "", key: "common.auto", label: tr("common.auto") },
       ...(caps.profiles || []).map((name) => ({ value: name, label: name })),
     ]);
     setOptions("convertLevel", [
-      { value: "", label: tr("common.auto") },
+      { value: "", key: "common.auto", label: tr("common.auto") },
       ...(caps.levels || []).map((name) => ({ value: name, label: name })),
     ]);
     const videoCount = (caps.encoders || []).filter((e) => e.kind === "video").length;
@@ -1316,7 +1320,7 @@ async function loadFfmpegSupport() {
 
   convertPresets = Array.isArray(presets) ? presets : [];
   $("convertPreset").innerHTML =
-    `<option value="">${escapeHtml(tr("convert.preset_none"))}</option>` +
+    `<option value="" data-i18n="convert.preset_none">${escapeHtml(tr("convert.preset_none"))}</option>` +
     convertPresets
       .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`)
       .join("");
@@ -1327,7 +1331,7 @@ async function loadConvertStreams(path) {
     const info = await invoke("media_info", { path });
     const streams = info.streams || [];
     const build = (type) => [
-      { value: "", label: tr("common.auto") },
+      { value: "", key: "common.auto", label: tr("common.auto") },
       ...streams
         .filter((s) => s.type === type && !s.attached_pic)
         .map((s) => {
