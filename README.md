@@ -8,6 +8,20 @@ It also ships an MCP server, so agents and scripts can drive transcription and s
 
 ![Maplefall](assets/screenshot.png)
 
+## Download and install
+
+Get the latest build from [Releases](https://github.com/flwllu/Maplefall/releases/latest).
+
+- `Maplefall_0.1.0_aarch64.dmg` — Apple Silicon (M-series). This build does not run on Intel Macs.
+- Check the download with `shasum -a 256 Maplefall_0.1.0_aarch64.dmg` and compare against `b0c93de55355b493c152b484b415731f29534f37ec0a3be867f4f6c2b7bec121`.
+
+Release builds are **ad-hoc signed, not notarized by Apple**, so macOS blocks the first launch. Open it once with either:
+
+- Right-click the app in Finder → **Open** → confirm, or
+- `xattr -dr com.apple.quarantine /Applications/Maplefall.app`
+
+FFmpeg, whisper-cli and the MDX model are bundled — there is nothing else to install.
+
 ## Features
 
 **Format conversion**

@@ -8,6 +8,20 @@
 
 ![枫落工具](assets/screenshot.png)
 
+## 下载与安装
+
+到 [Releases](https://github.com/flwllu/Maplefall/releases/latest) 下载最新版本。
+
+- `Maplefall_0.1.0_aarch64.dmg` —— 适用于 Apple Silicon（M 系列）。此版本无法在 Intel Mac 上运行。
+- 可用 `shasum -a 256 Maplefall_0.1.0_aarch64.dmg` 核对，正确值：`b0c93de55355b493c152b484b415731f29534f37ec0a3be867f4f6c2b7bec121`。
+
+发布包为 **ad-hoc 签名、未经 Apple 公证**，首次打开会被系统拦截，任选一种方式放行：
+
+- 在访达里右键点击应用 → **打开** → 确认；或
+- 执行 `xattr -dr com.apple.quarantine /Applications/Maplefall.app`
+
+FFmpeg、whisper-cli 与 MDX 模型均已内置，无需另外安装。
+
 ## 功能
 
 **格式转换**
