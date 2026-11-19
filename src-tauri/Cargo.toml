@@ -1,0 +1,33 @@
+[package]
+name = "whisper-studio"
+version = "0.1.0"
+description = "Local audio/video utility: conversion, transcription, song renaming, vocal separation (not a video editor)"
+edition = "2021"
+default-run = "whisper-studio"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ort = "2.0.0-rc.10"
+symphonia = { version = "0.5", features = ["mp3", "wav", "pcm", "flac", "aac", "isomp4", "ogg", "vorbis"] }
+realfft = "3.4"
+hound = "3.5"
+
+[[bin]]
+name = "whisper-studio-mcp"
+path = "src/bin/mcp.rs"
+
+[profile.dev]
+debug = 1
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"
+codegen-units = 1
+strip = true

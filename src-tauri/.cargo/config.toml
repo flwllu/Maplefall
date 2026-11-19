@@ -1,0 +1,5 @@
+# ort 自带的 onnxruntime 预编译静态库以 macOS 13.4 为最低部署版本。
+# 若按工具链默认（11.0）链接，会在 arm64 下报缺少 ___isPlatformVersionAtLeast。
+# 这里统一提高部署目标；Linux / Windows 构建会忽略该变量。
+[env]
+MACOSX_DEPLOYMENT_TARGET = "13.4"

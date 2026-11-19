@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title>任务列表</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body class="task-window">
+    <div class="task-wrap">
+      <header class="task-head" data-tauri-drag-region>
+        <h2 data-tauri-drag-region data-i18n="tasks.title">任务列表</h2>
+        <div class="task-head-actions">
+          <button class="ghost" id="clearFinished" type="button" data-i18n="tasks.clear">清理任务</button>
+        </div>
+      </header>
+      <div class="task-concurrency">
+        <span data-i18n="tasks.concurrency">并发上限</span>
+        <input type="number" id="concurrency" min="1" max="100" value="2" />
+        <span class="dim" data-i18n="tasks.concurrency_tip">1–100，改完自动保存</span>
+      </div>
+      <p class="task-note" id="taskNote" hidden></p>
+      <div class="task-list" id="taskList"></div>
+      <p class="task-empty" id="taskEmpty" data-i18n="tasks.empty">还没有任务。在转写页开始转写，或通过 MCP 提交任务。</p>
+    </div>
+
+    <div class="modal-mask" id="clearMask" hidden>
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3 data-i18n="tasks.clear_title">清理任务</h3>
+        <p class="modal-text" id="clearText"></p>
+        <label class="check modal-check">
+          <input type="checkbox" id="clearArtifacts" />
+          <span data-i18n="tasks.clear_artifacts">同时清理产物</span>
+        </label>
+        <p class="modal-hint" id="artifactHint"></p>
+        <div class="modal-actions">
+          <button class="ghost" id="clearCancel" type="button" data-i18n="tasks.cancel">取消</button>
+          <button class="modal-btn" id="clearConfirm" type="button" data-i18n="tasks.clear_confirm">清理</button>
+        </div>
+      </div>
+    </div>
+    <script src="locales/zh-CN.js"></script>
+    <script src="i18n.js"></script>
+    <script type="module" src="tasks.js"></script>
+  </body>
+</html>

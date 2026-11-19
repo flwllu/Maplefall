@@ -1,0 +1,15 @@
+{
+  "name": "whisper-studio",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local audio/video utility: format conversion, speech transcription, song renaming and tag editing, vocal separation. A processing and tidy-up tool, not a video editor. Fully offline.",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark light" />
+    <title data-i18n="app.name">枫落工具</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar" data-tauri-drag-region>
+        <div class="brand" data-tauri-drag-region>
+          <span class="mark" data-tauri-drag-region>枫</span>
+          <h1 data-i18n="app.name" data-tauri-drag-region>枫落工具</h1>
+          <span class="tag" data-i18n="app.tagline" data-tauri-drag-region>本地音视频</span>
+        </div>
+        <div class="top-actions">
+          <button class="ghost top-tasks" id="openTasks" type="button" data-i18n-title="app.tasks_tip" title="任务列表"><span data-i18n="app.tasks">任务</span> <span class="task-badge" id="taskBadge" hidden>0</span></button>
+          <div class="status" id="status" data-i18n="app.ready" data-tauri-drag-region>就绪</div>
+        </div>
+      </header>
+
+      <div class="shell">
+        <aside class="sidebar">
+          <button class="nav-item active" data-page="convert" data-i18n="nav.convert">格式转换</button>
+          <button class="nav-item" data-page="transcribe" data-i18n="nav.transcribe">转写</button>
+          <button class="nav-item" data-page="editor" data-i18n="nav.editor">歌曲编辑</button>
+          <button class="nav-item" data-page="batch" data-i18n="nav.batch">批量重命名</button>
+          <div class="sidebar-foot">
+            <button class="nav-item" data-page="settings" data-i18n="nav.settings">设置</button>
+            <button class="nav-item" data-page="about" data-i18n="nav.about">关于</button>
+          </div>
+        </aside>
+
+        <main class="workspace">
+          <!-- 转写 -->
+          <section class="page" data-page="transcribe" hidden>
+            <div class="page-body">
+              <div class="page-toolbar">
+                <button class="ghost" id="advToggle" data-i18n="common.advanced">高级参数</button>
+              </div>
+
+              <section class="panel">
+                <div class="drop" id="drop">
+                  <div class="drop-icon">↓</div>
+                  <p class="drop-title" data-i18n="transcribe.drop_title">拖入音频，或点击选择</p>
+                  <p class="drop-sub" data-i18n="transcribe.drop_sub">拖入或选择任意音视频文件，选完自动检测格式</p>
+                  <p class="file" id="file" data-i18n="common.no_file">未选择文件</p>
+                </div>
+
+                <div class="controls">
+                  <label class="field">
+                    <span data-i18n="transcribe.model">模型</span>
+                    <select id="model"></select>
+                  </label>
+                  <button class="ghost" id="openModels" type="button" data-i18n="transcribe.models_folder" data-i18n-title="transcribe.models_folder_tip" title="打开模型文件夹，放入 ggml 格式的模型后自动出现在上方列表">模型文件夹</button>
+                  <label class="field">
+                    <span data-i18n="transcribe.lang">语言</span>
+                    <select id="lang">
+                      <option value="zh">中文</option>
+                      <option value="en">English</option>
+                      <option value="pt">Português</option>
+                      <option value="ja">日本語</option>
+                      <option value="auto" data-i18n="transcribe.lang_auto">自动检测</option>
+                    </select>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" id="suppress" checked />
+                    <span data-i18n="transcribe.suppress">抑制非语音</span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" id="nocontext" checked />
+                    <span data-i18n="transcribe.nocontext">不沿用上文</span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" id="separate" checked />
+                    <span data-i18n="transcribe.separate">先分离人声</span>
+                  </label>
+                  <label class="check">
+                    <input type="checkbox" id="vad" checked />
+                    <span data-i18n="transcribe.vad">跳过无语音片段</span>
+                  </label>
+                </div>
+
+                <button class="run" id="run" data-i18n="transcribe.run" disabled>开始转写</button>
+
+                <div class="progress-wrap">
+                  <div class="progress"><div class="bar" id="bar"></div></div>
+                  <span class="pct" id="pct">0%</span>
+                </div>
+              </section>
+
+              <section class="panel result">
+                <div class="result-head">
+                  <h2 data-i18n="transcribe.result">识别结果</h2>
+                  <div class="actions">
+                    <button class="ghost" id="copy" data-i18n="common.copy">复制</button>
+                    <button class="ghost" id="saveTxt">TXT</button>
+                    <button class="ghost" id="saveSrt">SRT</button>
+                    <button class="ghost" id="saveLrc">LRC</button>
+                  </div>
+                </div>
+                <pre id="text" class="text" data-i18n="transcribe.waiting">等待转写…</pre>
+              </section>
+            </div>
+          </section>
+
+          <!-- 歌曲编辑：选一首歌，看数据 / 改标签 / 换封面 / 改文件名 -->
+          <section class="page" data-page="editor" hidden>
+            <div class="page-body">
+              <section class="panel">
+                <div class="result-head">
+                  <h2 data-i18n="editor.title">歌曲编辑</h2>
+                  <div class="actions">
+                    <button class="ghost" id="editorPick" data-i18n="editor.pick">选择歌曲</button>
+                    <button class="ghost" id="editorReload" data-i18n="editor.reload" disabled>重新读取</button>
+                  </div>
+                </div>
+                <p class="file" id="editorPath" data-i18n="common.no_file">未选择文件</p>
+
+                <h3 class="section-title" data-i18n="editor.raw">原始数据</h3>
+                <div class="kv-grid" id="infoGrid">
+                  <p class="adv-tip" data-i18n="editor.raw_empty">选择一首歌后显示数据。</p>
+                </div>
+
+                <h3 class="section-title" data-i18n="editor.tags">标签</h3>
+                <div class="form-grid">
+                  <label class="field"><span data-i18n="editor.tag_title">标题 title</span><input id="tagTitle" /></label>
+                  <label class="field"><span data-i18n="editor.tag_artist">艺术家 artist</span><input id="tagArtist" /></label>
+                  <label class="field"><span data-i18n="editor.tag_album">专辑 album</span><input id="tagAlbum" /></label>
+                  <label class="field"><span data-i18n="editor.tag_albumartist">专辑艺术家 albumartist</span><input id="tagAlbumArtist" /></label>
+                  <label class="field"><span data-i18n="editor.tag_genre">流派 genre</span><input id="tagGenre" /></label>
+                  <label class="field"><span data-i18n="editor.tag_date">年份 date</span><input id="tagDate" /></label>
+                  <label class="field"><span data-i18n="editor.tag_track">音轨号 tracknumber</span><input id="tagTrack" /></label>
+                  <label class="field"><span data-i18n="editor.tag_composer">作曲 composer</span><input id="tagComposer" /></label>
+                </div>
+                <button class="run" id="tagsSave" data-i18n="editor.save_tags" disabled>保存标签</button>
+                <p class="adv-tip" data-i18n="editor.save_tags_tip">保存会重写该文件（内部走 ffmpeg 无损重封装），大文件需要稍等。</p>
+
+                <h3 class="section-title" data-i18n="editor.lyrics">歌词</h3>
+                <label class="field">
+                  <span data-i18n="editor.lyrics_label">歌词内容（LRC / 纯文本，可直接编辑）</span>
+                  <textarea id="lyricsText" rows="7" data-i18n-ph="editor.lyrics_ph" placeholder="[00:12.00]第一句歌词&#10;[00:16.50]第二句歌词"></textarea>
+                </label>
+                <div class="actions">
+                  <button class="ghost" id="lyricsImport" data-i18n="editor.lyrics_import" disabled>导入 LRC / SRT / VTT / TXT</button>
+                  <button class="ghost" id="lyricsClear" data-i18n="common.clear" disabled>清空</button>
+                  <button class="run" id="lyricsSave" data-i18n="editor.save_lyrics" disabled>保存歌词</button>
+                </div>
+                <p class="adv-tip" data-i18n="editor.lyrics_tip">导入后可再编辑；保存时写入文件元数据，不生成额外的歌词文件。</p>
+
+                <h3 class="section-title" data-i18n="editor.cover">封面</h3>
+                <div class="cover-box">
+                  <img id="coverImg" alt="封面" data-i18n-title="editor.cover_alt" hidden />
+                  <p class="adv-tip" id="coverEmpty" data-i18n="editor.cover_empty">暂无封面</p>
+                </div>
+                <div class="actions">
+                  <button class="ghost" id="coverChoose" data-i18n="editor.cover_choose">选择图片并写入</button>
+                  <button class="ghost" id="coverRemove" data-i18n="editor.cover_remove" disabled>删除封面</button>
+                </div>
+
+                <h3 class="section-title" data-i18n="editor.filename">文件名</h3>
+                <label class="field">
+                  <span data-i18n="editor.filename_label">新文件名（不含扩展名）</span>
+                  <input id="renameInput" data-i18n-ph="editor.filename_ph" placeholder="新的文件名" />
+                </label>
+                <div class="actions">
+                  <button class="ghost" id="renameFromTag" data-i18n="editor.fill_from_tag" disabled>用「艺术家 - 标题」填充</button>
+                  <button class="ghost" id="renameDo" data-i18n="editor.rename" disabled>执行重命名</button>
+                </div>
+              </section>
+            </div>
+          </section>
+
+          <!-- 批量重命名 -->
+          <section class="page" data-page="batch" hidden>
+            <div class="page-body">
+              <section class="panel">
+                <div class="result-head">
+                  <h2 data-i18n="batch.title">批量重命名</h2>
+                  <div class="actions">
+                    <button class="ghost" id="batchPick" data-i18n="batch.pick">选择文件夹</button>
+                  </div>
+                </div>
+                <p class="file" id="batchPath" data-i18n="common.no_folder">未选择文件夹</p>
+                <label class="field">
+                  <span data-i18n="batch.pattern">命名模板</span>
+                  <select id="batchPattern">
+                    <option value="artist_title" data-i18n="batch.p_artist_title">艺术家 - 标题</option>
+                    <option value="title_artist" data-i18n="batch.p_title_artist">标题 - 艺术家</option>
+                    <option value="title_only" data-i18n="batch.p_title">仅标题</option>
+                    <option value="artist_only" data-i18n="batch.p_artist">仅艺术家</option>
+                  </select>
+                </label>
+                <div class="batch-list" id="batchList">
+                  <p class="adv-tip" data-i18n="batch.empty">选择文件夹后列出其中的音频文件。</p>
+                </div>
+                <button class="run" id="batchDo" data-i18n="batch.run" disabled>按模板重命名全部</button>
+              </section>
+            </div>
+          </section>
+
+          <!-- 格式转换 -->
+          <section class="page" data-page="convert">
+            <div class="page-body">
+              <div class="page-toolbar">
+                <button class="ghost" id="convertAdvToggle" data-i18n="common.advanced">高级参数</button>
+              </div>
+
+              <section class="panel">
+                <div class="result-head">
+                  <h2 data-i18n="convert.title">格式转换</h2>
+                  <div class="actions">
+                    <button class="ghost" id="convertPick" data-i18n="convert.pick">选择源文件</button>
+                  </div>
+                </div>
+                <p class="file" id="convertPath" data-i18n="common.no_file">未选择文件</p>
+
+                <div class="form-grid">
+                  <label class="field">
+                    <span data-i18n="convert.target">目标格式</span>
+                    <select id="convertFormat">
+                      <option value="" data-i18n="convert.keep_ext">保持原扩展名</option>
+                      <option value="mp4">MP4</option>
+                      <option value="mov">MOV</option>
+                      <option value="ipod">M4A</option>
+                      <option value="matroska">MKV</option>
+                      <option value="webm">WebM</option>
+                      <option value="avi">AVI</option>
+                      <option value="mpegts">TS</option>
+                      <option value="mp3">MP3</option>
+                      <option value="wav">WAV</option>
+                      <option value="flac">FLAC</option>
+                      <option value="ogg">OGG</option>
+                      <option value="gif">GIF</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span data-i18n="convert.vcodec">视频编码</span>
+                    <select id="convertVideo">
+                      <option value="" data-i18n="common.keep">保持原样</option>
+                      <option value="copy" data-i18n="common.copy_stream">直接复制</option>
+                      <option value="h264">H.264</option>
+                      <option value="hevc">H.265</option>
+                      <option value="vp9">VP9</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span data-i18n="convert.fps">帧率</span>
+                    <select id="convertFpsPreset">
+                      <option value="" data-i18n="common.keep">保持原样</option>
+                      <option value="24">24 fps</option>
+                      <option value="25">25 fps</option>
+                      <option value="30">30 fps</option>
+                      <option value="50">50 fps</option>
+                      <option value="60">60 fps</option>
+                      <option value="120">120 fps</option>
+                      <option value="custom" data-i18n="common.custom_adv">自定义（在高级参数里填）</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span data-i18n="convert.resolution">分辨率</span>
+                    <select id="convertResPreset">
+                      <option value="" data-i18n="common.keep">保持原样</option>
+                      <option value="2160p">4K（2160p）</option>
+                      <option value="1440p">2K（1440p）</option>
+                      <option value="1080p">1080p</option>
+                      <option value="720p">720p</option>
+                      <option value="480p">480p</option>
+                      <option value="360p">360p</option>
+                      <option value="custom" data-i18n="common.custom_adv">自定义（在高级参数里填）</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span data-i18n="convert.quality">画质</span>
+                    <select id="convertQuality">
+                      <option value="" data-i18n="convert.q_encoder">编码器默认</option>
+                      <option value="high" data-i18n="convert.q_high">高（CRF 18）</option>
+                      <option value="balanced" data-i18n="convert.q_balanced">均衡（CRF 23）</option>
+                      <option value="small" data-i18n="convert.q_small">小体积（CRF 28）</option>
+                      <option value="custom" data-i18n="common.custom_adv">自定义（在高级参数里填）</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span data-i18n="convert.acodec">音频编码</span>
+                    <select id="convertAudio">
+                      <option value="" data-i18n="common.keep">保持原样</option>
+                      <option value="copy" data-i18n="common.copy_stream">直接复制</option>
+                      <option value="aac">AAC</option>
+                      <option value="libmp3lame">MP3</option>
+                      <option value="flac">FLAC</option>
+                      <option value="none" data-i18n="convert.remove_audio">去掉音轨</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    <span data-i18n="convert.bitrate">音频码率</span>
+                    <select id="convertBitrate">
+                      <option value="" data-i18n="common.keep">保持原样</option>
+                      <option value="320k">320k</option>
+                      <option value="256k">256k</option>
+                      <option value="192k">192k</option>
+                      <option value="128k">128k</option>
+                      <option value="96k">96k</option>
+                    </select>
+                  </label>
+                  <label class="field"><span data-i18n="convert.start">裁剪起点（秒）</span><input type="number" id="convertStart" step="0.1" placeholder="0" /></label>
+                  <label class="field"><span data-i18n="convert.duration">裁剪时长（秒）</span><input type="number" id="convertDuration" step="0.1" data-i18n-ph="convert.full_length" placeholder="全长" /></label>
+                </div>
+
+                <label class="check">
+                  <input type="checkbox" id="convertNoVideo" />
+                  <span data-i18n="convert.audio_only">只要音频（去掉视频轨；选 MP3/WAV/FLAC 会自动勾上）</span>
+                </label>
+                <label class="check">
+                  <input type="checkbox" id="convertFaststart" />
+                  <span data-i18n="convert.faststart">网页/微信秒开（+faststart，仅 mp4/mov）</span>
+                </label>
+
+                <div class="actions">
+                  <button class="ghost" id="convertChooseDir" data-i18n="convert.choose_dir">选择输出文件夹</button>
+                  <button class="ghost" id="convertChooseOut" data-i18n="convert.save_as">另存为…</button>
+                </div>
+                <p class="file" id="convertOut" data-i18n="convert.no_out">未选择输出位置</p>
+                <p class="adv-tip" data-i18n="convert.out_tip">
+                  不选输出位置时默认存到源文件所在文件夹；文件名按「原文件名-converted.扩展名」自动生成，扩展名随格式变化，重名自动加序号。
+                </p>
+                <button class="run" id="convertRun" data-i18n="convert.run" disabled>开始转换</button>
+                <div class="progress-wrap">
+                  <div class="progress"><div class="bar" id="convertBar"></div></div>
+                  <span class="pct" id="convertPct">0%</span>
+                </div>
+              </section>
+            </div>
+
+            <!-- 高级参数：跟转写页一样做成浮层，不占主界面 -->
+            <div class="popover" id="convertAdvPopover">
+              <div class="popover-head">
+                <h3 data-i18n="common.advanced">高级参数</h3>
+                <button class="ghost" id="convertAdvClose" data-i18n="common.close">关闭</button>
+              </div>
+              <p class="adv-tip" data-i18n="convert.adv_tip">这里填的值会覆盖上面的下拉；留空表示交给编码器或源文件决定。</p>
+              <div class="adv-grid">
+                <label class="field wide">
+                  <span data-i18n="convert.preset">场景预设（一键填好下面各项，之后仍可手改）</span>
+                  <select id="convertPreset">
+                    <option value="" data-i18n="convert.preset_none">不使用预设</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span data-i18n="convert.custom_fps">自定义帧率</span>
+                  <input id="convertFps" data-i18n-ph="convert.fps_ph" placeholder="如 30000/1001" />
+                </label>
+                <label class="field">
+                  <span data-i18n="convert.crf">CRF 数值（0-51，越小越好）</span>
+                  <input type="number" id="convertCrf" min="0" max="51" placeholder="23" />
+                </label>
+                <label class="field"><span data-i18n="convert.width">宽度（可选）</span><input type="number" id="convertWidth" data-i18n-ph="convert.auto_ph" placeholder="自动" /></label>
+                <label class="field"><span data-i18n="convert.height">高度（可选）</span><input type="number" id="convertHeight" data-i18n-ph="convert.auto_ph" placeholder="自动" /></label>
+                <label class="field"><span data-i18n="convert.vpreset">编码 preset</span><select id="convertVpreset"></select></label>
+                <label class="field"><span>tune</span><select id="convertTune"></select></label>
+                <label class="field"><span>profile</span><select id="convertProfile"></select></label>
+                <label class="field"><span>level</span><select id="convertLevel"></select></label>
+                <label class="field"><span data-i18n="convert.pixfmt">像素格式</span><select id="convertPixFmt"></select></label>
+                <label class="field"><span data-i18n="convert.vbitrate">视频码率</span><input id="convertVideoBitrate" data-i18n-ph="convert.vbitrate_ph" placeholder="如 2M，填了就不用 CRF" /></label>
+                <label class="field"><span data-i18n="convert.maxrate">最大码率</span><input id="convertMaxrate" data-i18n-ph="convert.maxrate_ph" placeholder="如 4M" /></label>
+                <label class="field"><span data-i18n="convert.bufsize">码率缓冲</span><input id="convertBufsize" data-i18n-ph="convert.bufsize_ph" placeholder="如 8M" /></label>
+                <label class="field"><span data-i18n="convert.samplerate">采样率（Hz）</span><input type="number" id="convertSampleRate" data-i18n-ph="convert.samplerate_ph" placeholder="如 16000" /></label>
+                <label class="field"><span data-i18n="convert.channels">声道数</span><input type="number" id="convertChannels" data-i18n-ph="convert.channels_ph" placeholder="1 / 2" /></label>
+                <label class="field">
+                  <span data-i18n="convert.vstream">视频流</span>
+                  <select id="convertVideoStream"><option value="" data-i18n="common.auto">自动</option></select>
+                </label>
+                <label class="field">
+                  <span data-i18n="convert.astream">音频流</span>
+                  <select id="convertAudioStream"><option value="" data-i18n="common.auto">自动</option></select>
+                </label>
+                <label class="field">
+                  <span data-i18n="convert.subtitles">字幕</span>
+                  <select id="convertSubtitles">
+                    <option value="" data-i18n="convert.sub_default">默认</option>
+                    <option value="copy" data-i18n="convert.sub_copy">复制字幕流</option>
+                    <option value="none" data-i18n="convert.sub_none">去掉字幕</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span data-i18n="convert.format_adv">完整容器列表（覆盖上面的目标格式）</span>
+                  <select id="convertFormatAdvanced"><option value="" data-i18n="convert.same_as_above">同上</option></select>
+                </label>
+                <label class="field wide">
+                  <span data-i18n="convert.vf">视频滤镜链（-vf，接在缩放之后）</span>
+                  <input id="convertVf" data-i18n-ph="convert.vf_ph" placeholder="如 crop=iw:ih-20:0:0,hqdn3d" />
+                </label>
+                <label class="field wide">
+                  <span data-i18n="convert.af">音频滤镜链（-af）</span>
+                  <input id="convertAf" data-i18n-ph="convert.af_ph" placeholder="如 loudnorm=I=-16:TP=-1.5:LRA=11" />
+                </label>
+                <label class="check adv-check">
+                  <input type="checkbox" id="convertTwoPass" />
+                  <span data-i18n="convert.twopass">两遍编码（需填视频码率）</span>
+                </label>
+                <label class="check adv-check">
+                  <input type="checkbox" id="convertOverwrite" checked />
+                  <span data-i18n="convert.overwrite">覆盖已存在的输出文件</span>
+                </label>
+                <label class="field wide">
+                  <span data-i18n="convert.metadata">元数据（每行 key=value）</span>
+                  <textarea id="convertMetadata" rows="3" data-i18n-ph="convert.metadata_ph" placeholder="title=我的视频&#10;artist=某某"></textarea>
+                </label>
+                <label class="field wide">
+                  <span data-i18n="convert.extra">额外参数（每行一个，原样透传给 ffmpeg）</span>
+                  <textarea id="convertExtra" rows="4" placeholder="-hwaccel&#10;videotoolbox"></textarea>
+                </label>
+              </div>
+              <p class="adv-tip" id="convertCapsTip" data-i18n="convert.caps_loading">正在读取内置 ffmpeg 能力…</p>
+            </div>
+          </section>
+
+          <!-- 设置 -->
+          <section class="page" data-page="settings" hidden>
+            <div class="page-body">
+              <section class="panel">
+                <div class="result-head">
+                  <h2 data-i18n="settings.title">设置</h2>
+                </div>
+                <label class="field">
+                  <span data-i18n="settings.language">界面语言</span>
+                  <select id="localeSelect"></select>
+                </label>
+                <label class="field">
+                  <span data-i18n="settings.theme">外观主题</span>
+                  <select id="themeSelect">
+                    <option value="auto" data-i18n="settings.theme_auto">跟随系统</option>
+                    <option value="light" data-i18n="settings.theme_light">浅色</option>
+                    <option value="dark" data-i18n="settings.theme_dark">深色</option>
+                  </select>
+                </label>
+                <label class="check">
+                  <input type="checkbox" id="remember" checked />
+                  <span data-i18n="settings.remember">记住界面选项</span>
+                </label>
+                <p class="adv-tip" data-i18n="settings.remember_tip">
+                  开启后，转写页的模型、语言、各个开关和高级参数会写入下面的 JSON 文件，下次启动自动恢复；关闭后既不再写入，也不会读取已保存的选项。
+                </p>
+                <label class="check">
+                  <input type="checkbox" id="mcpEnabled" checked />
+                  <span data-i18n="settings.mcp">启用 MCP 服务（127.0.0.1:17321）</span>
+                </label>
+                <p class="adv-tip" data-i18n="settings.mcp_tip">
+                  关闭后立即释放端口，MCP 客户端会显示未连接；再打开即可恢复，无需重启应用。只监听本机，不对外网开放。
+                </p>
+                <label class="field">
+                  <span data-i18n="settings.concurrency">转写并发数</span>
+                  <input type="number" id="taskConcurrency" min="1" max="100" value="2" />
+                </label>
+                <p class="adv-tip" data-i18n="settings.concurrency_tip">
+                  同时运行的转写任务数，默认 2，上限 100。每个任务都要加载约 550 MB 模型和编码器，并发越高越吃内存和 CPU；设太大可能导致应用变慢甚至卡死，请按本机配置量力而行。任务窗口里也能改。
+                </p>
+                <label class="check">
+                  <input type="checkbox" id="debugLog" />
+                  <span data-i18n="settings.debug">调试日志（每次转写单独存一份）</span>
+                </label>
+                <p class="adv-tip" data-i18n="settings.debug_tip">
+                  开启后，每次转写会在下面的目录生成一份独立日志，记录参数、whisper-cli 的每一行输出、进度和失败原因；应用启动与 MCP 开关也会留痕。关闭后不再写入。日志里可能包含本机文件路径，排查完可自行删除。
+                </p>
+                <p class="file settings-path" id="logsPath">…</p>
+                <button class="ghost" id="openLogs" type="button" data-i18n="settings.open_logs">打开日志目录</button>
+                <p class="file settings-path" id="settingsPath">…</p>
+                <p class="adv-tip" data-i18n="settings.ffmpeg_tip">媒体标签、封面与格式转换使用随包内置的静态 FFmpeg / ffprobe，无需另行安装。</p>
+              </section>
+            </div>
+          </section>
+
+          <!-- 关于 -->
+          <section class="page" data-page="about" hidden>
+            <div class="page-body about-page">
+              <section class="panel about-card">
+                <img class="about-icon" src="appicon.png" alt="枫落工具" />
+                <h2 class="about-name" data-i18n="about.name">枫落工具</h2>
+                <p class="about-version" data-i18n="about.version" data-i18n-vars='{"version":"0.1.0"}'>版本 0.1.0 · 本地音视频</p>
+                <div class="about-divider"></div>
+                <p class="about-meta" data-i18n="about.author">开发者 flwllu</p>
+                <p class="about-meta dim" data-i18n="about.license">MIT License · Copyright © 2026 flwllu</p>
+                <p class="about-note" data-i18n="about.note">
+                  本地音视频工具：转写基于 whisper.cpp，人声分离基于 UVR MDX，解码与格式转换使用内置 FFmpeg。所有处理都在本机完成，不联网。
+                </p>
+                <p class="about-meta dim about-attribution" data-i18n="about.attribution">
+                  人声分离模型 UVR-MDX-NET-Inst_HQ_3 由 Ultimate Vocal Remover 项目（Anjok07、aufr33 及贡献者）训练并公开，
+                  MIT 许可，版权归其作者。本项目原样附带、不主张任何权利，与该项目无从属或背书关系。
+                </p>
+                <div class="about-divider"></div>
+                <p class="about-meta" data-i18n="about.third_party">第三方组件许可</p>
+                <p class="about-meta dim about-attribution" data-i18n="about.third_party_body">
+                  内置 FFmpeg / ffprobe（GPL-2.0-or-later，含 libx264、libx265）以独立子进程调用，不并入本项目代码；
+                  对应源码可从 ffmpeg.org 取得，或向开发者索取，该承诺三年内有效。whisper.cpp、Silero VAD 与 UVR-MDX-NET 模型均为 MIT 许可，版权归各自作者。
+                  GPL 全文与完整声明随应用一起分发。
+                </p>
+                <div class="actions">
+                  <button class="ghost" id="openLicenses" data-i18n="about.open_licenses">打开许可文件</button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </main>
+      </div>
+
+      <!-- 高级参数浮层：固定在按钮上方展开，不参与页面流，日志不受影响 -->
+      <div class="popover" id="advPopover">
+        <div class="popover-head">
+          <h3 data-i18n="adv.title">高级参数</h3>
+          <button class="ghost" id="advClose" data-i18n="common.close">关闭</button>
+        </div>
+        <p class="adv-tip" data-i18n="adv.tip">留空表示使用默认值，修改后自动保存。填写提示词时会自动沿用上文，否则提示词不生效。</p>
+        <div class="adv-grid">
+          <label class="field wide">
+            <span data-i18n="adv.prompt">初始提示（歌词、专有名词，可空）</span>
+            <textarea id="advPrompt" rows="3" data-i18n-ph="adv.prompt_ph" placeholder="例如：Tell me, tell me how to be a fancy kid"></textarea>
+          </label>
+          <label class="check adv-check">
+            <input type="checkbox" id="advCarry" />
+            <span data-i18n="adv.carry">每段都携带初始提示</span>
+          </label>
+          <label class="check adv-check">
+            <input type="checkbox" id="advNoFallback" />
+            <span data-i18n="adv.nofallback">关闭温度回退（不乱编，可能留空）</span>
+          </label>
+          <label class="field">
+            <span data-i18n="adv.beam">beam size（-bs）</span>
+            <input type="number" id="advBeam" step="1" min="1" max="16" placeholder="5" />
+          </label>
+          <label class="field">
+            <span data-i18n="adv.best">best of（-bo）</span>
+            <input type="number" id="advBest" step="1" min="1" max="16" placeholder="5" />
+          </label>
+          <label class="field">
+            <span data-i18n="adv.nth">无语音阈值（-nth）</span>
+            <input type="number" id="advNth" step="0.05" min="0" max="1" placeholder="0.6" />
+          </label>
+          <label class="field">
+            <span data-i18n="adv.et">熵阈值（-et）</span>
+            <input type="number" id="advEt" step="0.1" placeholder="2.8" />
+          </label>
+          <label class="field">
+            <span data-i18n="adv.lpt">对数概率阈值（-lpt）</span>
+            <input type="number" id="advLpt" step="0.1" placeholder="-1.0" />
+          </label>
+          <label class="field">
+            <span data-i18n="adv.wt">词置信阈值（-wt）</span>
+            <input type="number" id="advWt" step="0.01" placeholder="0.01" />
+          </label>
+          <label class="field">
+            <span data-i18n="adv.ml">单段最大字数（-ml）</span>
+            <input type="number" id="advMl" step="1" min="0" placeholder="0" />
+          </label>
+        </div>
+        <div class="adv-actions">
+          <button class="ghost" id="advReset" data-i18n="adv.reset">恢复默认</button>
+        </div>
+      </div>
+    </div>
+    <script src="locales/zh-CN.js"></script>
+    <script src="i18n.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

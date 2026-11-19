@@ -1,0 +1,31 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "枫落工具",
+        "width": 980,
+        "height": 740,
+        "minWidth": 720,
+        "minHeight": 560,
+        "center": true,
+        "transparent": false,
+        "decorations": true,
+        "titleBarStyle": "Visible",
+        "hiddenTitle": false,
+        "windowEffects": { "effects": [], "state": "inactive" }
+      }
+    ]
+  },
+  "bundle": {
+    "targets": ["msi", "nsis"],
+    "icon": ["icons/icon.ico"],
+    "resources": [
+      "resources/bin/whisper_cpp/windows/*",
+      "resources/bin/ffmpeg/*.exe",
+      "resources/models/*.bin",
+      "resources/models/*.onnx",
+      "resources/models/README.md",
+      "resources/licenses/*"
+    ]
+  }
+}

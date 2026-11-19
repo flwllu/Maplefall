@@ -1,0 +1,49 @@
+{
+  "productName": "枫落工具",
+  "version": "0.1.0",
+  "identifier": "com.whisperstudio.desktop",
+  "build": {
+    "frontendDist": "../src"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "枫落工具",
+        "width": 980,
+        "height": 740,
+        "minWidth": 720,
+        "minHeight": 560,
+        "center": true,
+        "transparent": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "windowEffects": {
+          "effects": ["underWindowBackground"],
+          "state": "active"
+        }
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "macOS": {
+      "minimumSystemVersion": "13.4"
+    },
+    "icon": ["icons/icon.icns"],
+    "resources": [
+      "resources/bin/whisper_cpp/*.dylib",
+      "resources/bin/whisper_cpp/whisper-cli",
+      "resources/models/*.bin",
+      "resources/models/*.onnx",
+      "resources/models/*.mlmodelc/**/*",
+      "resources/models/README.md",
+      "resources/bin/ffmpeg/*",
+      "resources/licenses/*"
+    ]
+  }
+}

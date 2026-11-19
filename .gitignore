@@ -1,0 +1,33 @@
+# 构建产物
+/src-tauri/target/
+/dist/
+node_modules/
+
+# 构建期临时覆盖配置（build.command 生成，用完即删）
+/src-tauri/target/build-resources.*.json
+
+# Tauri 自动生成的 schema
+/src-tauri/gen/schemas/
+
+# 本地缓存与日志
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+
+# 二进制工具：不进仓库，随 Release 的 dmg 分发。
+# 其中 FFmpeg 是 GPL-2.0-or-later，放进仓库会让整仓被许可证扫描器识别成 GPL 项目；
+# 从源码构建时按 README「二进制工具」一节自行放入或改用系统安装的版本。
+/src-tauri/resources/bin/
+
+# 模型权重：不进仓库，随 Release 的 dmg 分发。
+# 从源码构建时按 README「模型获取与配置」自行下载，放进 resources/models/ 即可。
+/src-tauri/resources/models/*.bin
+/src-tauri/resources/models/*.onnx
+
+# CoreML 编码器（1.2 GB）：同样不进仓库，需要者自行用 whisper.cpp 的
+# models/generate-coreml-model.sh 生成；缺少时 whisper-cli 回落到 Metal + CPU。
+/src-tauri/resources/models/*.mlmodelc/
+
+# 内部开发日志（含本机运行环境信息，不随仓库发布）
+/docs/SESSION-*.md
