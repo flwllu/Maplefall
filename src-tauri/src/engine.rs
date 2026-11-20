@@ -123,8 +123,10 @@ fn format_timestamp(ms: u64) -> String {
     format!("{hours:02}:{mins:02}:{secs:02},{millis:03}")
 }
 
-/// 把单块产出的 SRT 时间轴整体后移，并按顺序重新编号。
-fn shift_srt(srt: &str, offset_ms: u64, start_index: u32) -> (String, u32) {
+/// 重新编号单块产出的 SRT。
+/// whisper-cli 写入的时间戳已经包含 `-ot` 偏移（实测 `-ot 20000` 的首条就是 00:00:20,000），
+/// 这里不能再平移，否则整条时间轴会成倍后移。
+fn merge_srt(srt: &str, start_index: u32) -> (String, u32) {
     let mut index = start_index;
     let mut out: Vec<String> = Vec::new();
     for block in srt.trim().split("\n\n") {
@@ -143,8 +145,8 @@ fn shift_srt(srt: &str, offset_ms: u64, start_index: u32) -> (String, u32) {
             index.to_string(),
             format!(
                 "{} --> {}",
-                format_timestamp(from + offset_ms),
-                format_timestamp(to + offset_ms)
+                format_timestamp(from),
+                format_timestamp(to)
             ),
         ];
         shifted.extend(lines[2..].iter().map(|line| line.to_string()));
@@ -300,9 +302,9 @@ pub fn run(
             tail = tail_prompt(&text);
         }
         if !srt.trim().is_empty() {
-            let (shifted, next) = shift_srt(&srt, start_ms, index);
-            if !shifted.is_empty() {
-                srt_parts.push(shifted);
+            let (merged, next) = merge_srt(&srt, index);
+            if !merged.is_empty() {
+                srt_parts.push(merged);
                 index = next;
             }
         }
