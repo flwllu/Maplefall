@@ -975,6 +975,7 @@ $("batchDo").addEventListener("click", async () => {
 /* ---------------- 格式转换 ---------------- */
 
 let convertInput = null;
+let convertAudioFile = null; // 「替换音轨」导入的音频
 let convertOutputFile = null; // 「另存为…」指定的完整路径，优先级最高
 let convertOutDir = null; // 输出文件夹，文件名自动生成
 let converting = false;
@@ -1091,6 +1092,10 @@ function resetConvertForm() {
   for (const id of CONVERT_TEXT_IDS) $(id).value = "";
   for (const id of CONVERT_CHECK_IDS) $(id).checked = false;
   $("convertOverwrite").checked = true;
+  $("convertReplaceAudio").checked = false;
+  $("convertPickAudio").disabled = true;
+  $("convertAudioPath").textContent = tr("convert.replace_audio_none");
+  convertAudioFile = null;
 }
 
 function applyConvertPreset(preset) {
@@ -1512,8 +1517,24 @@ $("convertPick").addEventListener("click", async () => {
   await loadConvertStreams(picked);
 });
 
-$("convertChooseDir").addEventListener("click", async () => {
-  const dir = await open({ directory: true, multiple: false });
+$("convertReplaceAudio").addEventListener("change", () => {
+  const on = $("convertReplaceAudio").checked;
+  $("convertPickAudio").disabled = !on;
+  if (!on) {
+    convertAudioFile = null;
+    $("convertAudioPath").textContent = tr("convert.replace_audio_none");
+  }
+});
+
+$("convertPickAudio").addEventListener("click", async () => {
+  const picked = await pickFile();
+  if (!picked) return;
+  if (!(await checkMedia(picked, "audio"))) return;
+  convertAudioFile = picked;
+  $("convertAudioPath").textContent = picked;
+});
+
+$("convertChooseDir").addEventListener("click", async () => {  const dir = await open({ directory: true, multiple: false });
   if (!dir) return;
   convertOutDir = dir;
   convertOutputFile = null;
@@ -1545,6 +1566,7 @@ function collectConvertArgs(output) {
     format: textOf("convertFormatAdvanced") || textOf("convertFormat"),
     video_stream: textOf("convertVideoStream"),
     audio_stream: textOf("convertAudioStream"),
+    replace_audio: $("convertReplaceAudio").checked ? convertAudioFile : null,
     subtitles: textOf("convertSubtitles"),
     no_video: $("convertNoVideo").checked,
     start: numOf("convertStart"),
@@ -1585,6 +1607,16 @@ $("convertRun").addEventListener("click", async () => {
   if (!convertInput) {
     setStatus(tr("convert.pick_src_first"), "err");
     return;
+  }
+  if ($("convertReplaceAudio").checked) {
+    if (!convertAudioFile) {
+      setStatus(tr("convert.replace_audio_required"), "err");
+      return;
+    }
+    if (textOf("convertAudio") === "none") {
+      setStatus(tr("convert.replace_audio_conflict"), "err");
+      return;
+    }
   }
   // 目标路径优先用「另存为…」指定的；否则在输出文件夹里自动命名并避开重名；
   // 没选输出文件夹就落到源文件同目录。

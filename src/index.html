@@ -217,6 +217,21 @@
                 </div>
                 <p class="file" id="convertPath" data-i18n="common.no_file">未选择文件</p>
 
+                <div class="result-head">
+                  <h2 data-i18n="convert.replace_audio">替换音轨</h2>
+                  <div class="actions">
+                    <label class="check">
+                      <input type="checkbox" id="convertReplaceAudio" />
+                      <span data-i18n="convert.replace_audio_on">启用</span>
+                    </label>
+                    <button class="ghost" id="convertPickAudio" data-i18n="convert.replace_audio_pick" disabled>选择音频</button>
+                  </div>
+                </div>
+                <p class="file" id="convertAudioPath" data-i18n="convert.replace_audio_none">未选择音频</p>
+                <p class="adv-tip" data-i18n="convert.replace_audio_tip">
+                  用外部音频替换原音轨。音频比视频长时按视频长度裁掉多余部分；音频比视频短时视频保持完整，音频播完即止。
+                </p>
+
                 <div class="form-grid">
                   <label class="field">
                     <span data-i18n="convert.target">目标格式</span>

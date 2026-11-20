@@ -29,6 +29,7 @@ FFmpeg, whisper-cli and the MDX model are bundled — there is nothing else to i
 - Video/audio codec, bitrate, CRF, resolution, frame rate, pixel format, filters, trim range
 - Codec and preset lists are read from the bundled ffmpeg's own capabilities at runtime (it falls back to a built-in common set when ffmpeg cannot report them)
 - Two-pass, faststart, metadata carrying and extra ffmpeg arguments, with live progress and cancel
+- **Replace audio track**: import an audio file to replace the original one (the video stream is untouched). If the audio is longer than the video it is trimmed to the video length; if shorter, the full video is kept and the audio simply ends early
 
 **Transcription**
 

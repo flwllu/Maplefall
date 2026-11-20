@@ -59,6 +59,9 @@ pub struct ConvertArgs {
     pub video_stream: Option<String>,
     #[serde(default)]
     pub audio_stream: Option<String>,
+    /// 用这个文件里的音频替换原音轨；留空表示保留原音轨
+    #[serde(default)]
+    pub replace_audio: Option<String>,
     #[serde(default)]
     pub no_video: bool,
     #[serde(default)]
@@ -163,6 +166,16 @@ fn probe_duration(path: &Path) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// 视频实际会输出多长：先扣掉裁剪起点，再受裁剪时长限制；探测失败返回 0。
+fn effective_video_len(input: &Path, start: Option<f64>, duration: Option<f64>) -> f64 {
+    let total = probe_duration(input);
+    if total <= 0.0 {
+        return 0.0;
+    }
+    let remain = (total - start.unwrap_or(0.0).max(0.0)).max(0.0);
+    duration.map(|d| d.min(remain)).unwrap_or(remain)
+}
+
 #[tauri::command]
 pub fn cancel_convert() {
     CANCEL.store(true, Ordering::SeqCst);
@@ -257,6 +270,11 @@ pub fn convert_with(
     if args.output.trim().is_empty() {
         return Err("未指定输出文件".into());
     }
+    if let Some(audio) = arg_text(&args.replace_audio) {
+        if !Path::new(audio).is_file() {
+            return Err("用来替换音轨的音频文件不存在".into());
+        }
+    }
     let total = args.duration.unwrap_or_else(|| probe_duration(&input));
     let passlog = std::env::temp_dir().join(format!("whisper-studio-pass-{}", std::process::id()));
 
@@ -339,11 +357,32 @@ fn run_pass(
         cmd.arg("-t").arg(format!("{duration}"));
     }
 
+    // 替换音轨：第二个输入只取它的音频，视频仍来自原文件。
+    let replace_audio = arg_text(&args.replace_audio);
+    if let Some(path) = replace_audio {
+        cmd.arg("-i").arg(path);
+        // 以视频为主：音频更长就按视频收尾；音频更短则保持视频完整，音频自然结束。
+        if pass != 1 {
+            let video_len = effective_video_len(&input, args.start, args.duration);
+            let audio_len = probe_duration(Path::new(path));
+            if audio_len > 0.0 && (video_len <= 0.0 || audio_len > video_len + 0.05) {
+                cmd.arg("-shortest");
+            }
+        }
+    }
+
     // 流选择：显式指定就用 -map，否则交给 ffmpeg 自动挑。
     if let Some(stream) = arg_text(&args.video_stream) {
         cmd.arg("-map").arg(stream);
+    } else if replace_audio.is_some() && !args.no_video {
+        cmd.arg("-map").arg("0:v:0");
     }
-    if let Some(stream) = arg_text(&args.audio_stream) {
+    if replace_audio.is_some() {
+        // 第一遍只分析、以及选「去掉音轨」时都不能 map 音频。
+        if !args.no_audio && pass != 1 && arg_text(&args.audio_codec) != Some("none") {
+            cmd.arg("-map").arg("1:a:0");
+        }
+    } else if let Some(stream) = arg_text(&args.audio_stream) {
         cmd.arg("-map").arg(stream);
     }
 
@@ -409,7 +448,11 @@ fn run_pass(
     }
 
     /* ---- 音频 ---- */
-    let audio_codec = arg_text(&args.audio_codec).unwrap_or("");
+    let mut audio_codec = arg_text(&args.audio_codec).unwrap_or("");
+    if replace_audio.is_some() && (audio_codec.is_empty() || audio_codec == "copy") {
+        // 外部音频的容器编码不确定，直接 copy 进 mp4/mov 很容易失败，统一转 AAC。
+        audio_codec = "aac";
+    }
     let audio_dropped = args.no_audio || audio_codec == "none" || pass == 1;
     if audio_dropped {
         cmd.arg("-an");
