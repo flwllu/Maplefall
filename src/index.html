@@ -449,6 +449,16 @@
                 <p class="adv-tip" data-i18n="settings.mcp_tip">
                   关闭后立即释放端口，MCP 客户端会显示未连接；再打开即可恢复，无需重启应用。只监听本机，不对外网开放。
                 </p>
+                <label class="check">
+                  <input type="checkbox" id="coremlEnabled" checked />
+                  <span data-i18n="settings.coreml">硬件加速（CoreML）</span>
+                </label>
+                <p class="adv-tip" data-i18n="settings.coreml_tip">
+                  开启后 whisper-cli 会加载模型旁的 CoreML 编码器；关闭则改用 Metal + CPU，速度慢一些，但启动更快、不额外占内存。
+                </p>
+                <p class="adv-tip" id="coremlMissing" data-i18n="settings.coreml_missing" hidden>
+                  当前模型旁边没有 CoreML 编码器，这个开关暂不可用。
+                </p>
                 <label class="field">
                   <span data-i18n="settings.concurrency">转写并发数</span>
                   <input type="number" id="taskConcurrency" min="1" max="100" value="2" />

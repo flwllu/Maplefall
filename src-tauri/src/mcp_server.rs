@@ -327,6 +327,7 @@ fn try_handle_transcribe(parsed: &Option<serde_json::Value>) -> Option<String> {
         separate: get_bool("separate", true),
         vad: get_bool("vad", false),
         suppress_ns: get_bool("suppress_ns", true),
+        coreml: get_bool("acceleration", true),
         no_context: get_bool("no_context", true),
         prompt: args.get("prompt").and_then(Value::as_str).map(str::to_string),
         no_fallback: get_bool("no_fallback", false),

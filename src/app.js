@@ -159,6 +159,8 @@ const el = {
   advReset: $("advReset"),
   remember: $("remember"),
   mcpEnabled: $("mcpEnabled"),
+  coreml: $("coremlEnabled"),
+  coremlMissing: $("coremlMissing"),
   debugLog: $("debugLog"),
   settingsPath: $("settingsPath"),
   logsPath: $("logsPath"),
@@ -241,7 +243,7 @@ const advFields = {
   max_len: $("advMl"),
 };
 
-const setting = { remember: true, mcpEnabled: true, debugLog: false, ui: {} };
+const setting = { remember: true, mcpEnabled: true, debugLog: false, coreml: true, ui: {} };
 
 function readAdvanced() {
   const num = (node) => {
@@ -306,6 +308,18 @@ function scheduleSave() {
   saveTimer = setTimeout(persist, 300);
 }
 
+/** 加速开关只在当前模型旁边确实有 CoreML 编码器时可点，没有就置灰并提示。 */
+async function refreshCoreml() {
+  const model = el.model.value;
+  let available = false;
+  try {
+    available = model ? await invoke("coreml_status", { model }) : false;
+  } catch (_) {}
+  el.coreml.disabled = !available;
+  el.coremlMissing.hidden = available;
+  el.coreml.checked = available ? setting.coreml : false;
+}
+
 el.advReset.addEventListener("click", () => {
   for (const node of Object.values(advFields)) {
     if (node.type === "checkbox") node.checked = false;
@@ -317,6 +331,11 @@ for (const node of Object.values(advFields)) node.addEventListener("change", sch
 for (const node of [el.model, el.lang, el.suppress, el.nocontext, el.separate, el.vad]) {
   node.addEventListener("change", scheduleSave);
 }
+el.model.addEventListener("change", refreshCoreml);
+el.coreml.addEventListener("change", () => {
+  setting.coreml = el.coreml.checked;
+  scheduleSave();
+});
 el.remember.addEventListener("change", () => {
   setting.remember = el.remember.checked;
   persist();
@@ -608,6 +627,7 @@ el.run.addEventListener("click", async () => {
     separate: el.separate.checked,
     vad: el.vad.checked,
     suppress_ns: el.suppress.checked,
+    coreml: el.coreml.checked,
     no_context: el.nocontext.checked,
     prompt: adv.prompt || null,
     no_fallback: !!adv.no_fallback,
@@ -1628,16 +1648,19 @@ listen("convert-progress", (event) => {
     if (loaded && typeof loaded === "object") {
       setting.remember = loaded.remember !== false;
       setting.mcpEnabled = loaded.mcpEnabled !== false;
+      setting.coreml = loaded.coreml !== false;
       setting.debugLog = loaded.debugLog === true;
       setting.ui = loaded.ui || {};
     }
     el.remember.checked = setting.remember;
     el.mcpEnabled.checked = setting.mcpEnabled;
+    el.coreml.checked = setting.coreml;
     el.debugLog.checked = setting.debugLog;
     el.settingsPath.textContent = await invoke("settings_path");
   } catch (_) {
     el.remember.checked = true;
     el.mcpEnabled.checked = true;
+    el.coreml.checked = true;
     el.debugLog.checked = false;
   }
   // 以实际监听状态为准：启动时端口被占用等失败也要在开关上看得出来。
@@ -1654,6 +1677,7 @@ listen("convert-progress", (event) => {
   } catch (_) {}
 
   await loadModels(false);
+  await refreshCoreml();
 
   if (setting.remember) applyUi(setting.ui);
 

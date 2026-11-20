@@ -15,6 +15,8 @@ pub struct Options {
     pub threads: i32,
     pub suppress_ns: bool,
     pub vad: bool,
+    /// 是否允许 whisper-cli 加载模型旁的 CoreML 编码器。
+    pub coreml: bool,
     pub prompt: Option<String>,
     pub no_context: bool,
     pub entropy_thold: f64,
@@ -45,8 +47,55 @@ fn percent_of(line: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
+/// whisper.cpp 推导编码器路径的方式：去掉模型路径末尾的 `.bin` 再拼后缀。
+pub fn encoder_path(model: &Path) -> PathBuf {
+    let text = model.to_string_lossy();
+    let stem = if text.len() >= 4 {
+        &text[..text.len() - 4]
+    } else {
+        &text[..]
+    };
+    PathBuf::from(format!("{stem}-encoder.mlmodelc"))
+}
+
+/// 关闭加速时给 whisper-cli 一个「旁边没有编码器」的模型入口。
+/// 用符号链接而不是复制，547 MB 的权重不会多占一份磁盘。
+/// whisper.cpp 只认模型路径字符串推导出的编码器路径，所以换个目录就自动回落。
+fn slim_model_path(model: &Path) -> PathBuf {
+    let Some(name) = model.file_name() else {
+        return model.to_path_buf();
+    };
+    let dir = std::env::temp_dir().join("whisper-studio-slim-models");
+    if fs::create_dir_all(&dir).is_err() {
+        return model.to_path_buf();
+    }
+    let dest = dir.join(name);
+    if fs::read_link(&dest).ok().as_deref() == Some(model) {
+        return dest;
+    }
+    let _ = fs::remove_file(&dest);
+    #[cfg(unix)]
+    let linked = std::os::unix::fs::symlink(model, &dest).is_ok();
+    #[cfg(windows)]
+    let linked = std::os::windows::fs::symlink_file(model, &dest).is_ok()
+        || fs::hard_link(model, &dest).is_ok();
+    #[cfg(not(any(unix, windows)))]
+    let linked = false;
+    if linked {
+        dest
+    } else {
+        model.to_path_buf()
+    }
+}
+
 fn build_command(opts: &Options, audio: &Path, prefix: &Path) -> Command {
     let mut cmd = Command::new(&opts.cli);
+    // 关闭加速且确实存在编码器时，换成无编码器的入口，whisper-cli 就会走 Metal + CPU。
+    let model = if opts.coreml || !encoder_path(&opts.model).is_dir() {
+        opts.model.clone()
+    } else {
+        slim_model_path(&opts.model)
+    };
     // Linux 下同目录的 .so 未必带 $ORIGIN rpath，这里补一层库搜索路径。
     if let Some(dir) = crate::tools::cli_lib_dir(&opts.cli) {
         let mut paths = vec![dir];
@@ -58,7 +107,7 @@ fn build_command(opts: &Options, audio: &Path, prefix: &Path) -> Command {
         }
     }
     cmd.arg("-m")
-        .arg(&opts.model)
+        .arg(&model)
         .arg("-f")
         .arg(audio)
         .arg("-l")

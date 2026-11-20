@@ -25,6 +25,9 @@ pub struct JobParams {
     pub vad: bool,
     #[serde(default = "default_true")]
     pub suppress_ns: bool,
+    /// 是否允许 whisper-cli 加载 CoreML 编码器；模型旁没有编码器时引擎自动回落。
+    #[serde(default = "default_true")]
+    pub coreml: bool,
     #[serde(default = "default_true")]
     pub no_context: bool,
     #[serde(default)]
@@ -458,6 +461,7 @@ fn run_job(
         "separate": p.separate,
         "vad": p.vad,
         "suppress_ns": p.suppress_ns,
+        "coreml": p.coreml,
         "no_context": p.no_context,
         "prompt": p.prompt,
         "no_fallback": p.no_fallback,

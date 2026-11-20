@@ -407,8 +407,22 @@ struct TranscribeArgs {
     vad: bool,
     #[serde(default)]
     separate: bool,
+    #[serde(default = "default_true")]
+    coreml: bool,
     #[serde(default)]
     advanced: Advanced,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// 当前模型旁边是否有 CoreML 编码器；没有时设置页的加速开关置灰。
+#[tauri::command]
+fn coreml_status(app: tauri::AppHandle, model: String) -> bool {
+    resolve_model(&app, &model)
+        .map(|path| engine::encoder_path(&path).is_dir())
+        .unwrap_or(false)
 }
 
 fn emit_progress(app: &tauri::AppHandle, stage: &str, detail: u32, overall: u32) {
@@ -660,6 +674,7 @@ fn run_transcribe_inner(
         threads: threads as i32,
         suppress_ns: args.suppress_ns,
         vad: args.vad,
+        coreml: args.coreml,
         // -mc 0 blocks the initial prompt entirely, so it only applies without a prompt.
         no_context: args.no_context && prompt.is_none(),
         prompt,
@@ -935,6 +950,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             list_models,
+            coreml_status,
             models_dir,
             open_models_dir,
             transcribe,
