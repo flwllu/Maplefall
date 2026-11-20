@@ -13,6 +13,7 @@ use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 
 mod convert;
 mod engine;
+mod job;
 mod mcp_server;
 mod mdx;
 mod media;
@@ -737,8 +738,8 @@ fn convert_presets() -> serde_json::Value {
 /* ---------------- 统一任务队列 ---------------- */
 
 #[tauri::command]
-fn submit_task(params: task_manager::JobParams, source: String, title: String) -> String {
-    task_manager::submit(params, &source, title)
+fn submit_task(kind: String, params: serde_json::Value, source: String, title: String) -> String {
+    task_manager::submit(&kind, params, &source, title)
 }
 
 #[tauri::command]
@@ -894,6 +895,13 @@ fn confirm_quit(app: &tauri::AppHandle) {
 }
 
 fn main() {
+    // 后台任务进程：`应用 --job <kind>` 时不启动界面，跑完一个任务就退出。
+    let cli: Vec<String> = std::env::args().collect();
+    if let Some(index) = cli.iter().position(|arg| arg == "--job") {
+        let kind = cli.get(index + 1).map(String::as_str).unwrap_or_default();
+        std::process::exit(job::run_cli(kind));
+    }
+
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(JobState::default())

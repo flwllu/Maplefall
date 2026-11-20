@@ -7,7 +7,7 @@
 
 use std::fs;
 use std::io::{BufRead, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde_json::{json, Value};
 
@@ -17,6 +17,9 @@ use serde_json::{json, Value};
 mod convert;
 #[path = "../engine.rs"]
 mod engine;
+#[allow(dead_code)]
+#[path = "../job.rs"]
+mod job;
 #[path = "../mdx.rs"]
 mod mdx;
 #[allow(dead_code)]
@@ -24,33 +27,6 @@ mod mdx;
 mod media;
 #[path = "../tools.rs"]
 mod tools;
-
-fn resources_dir() -> PathBuf {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Ok(dir) = std::env::var("WHISPER_STUDIO_RESOURCES") {
-        if !dir.trim().is_empty() {
-            candidates.push(PathBuf::from(dir));
-        }
-    }
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            candidates.push(parent.join("resources"));
-            candidates.push(parent.join("../Resources/resources"));
-            // 开发布局：可执行文件在 target/debug/，往上两级是 src-tauri/resources。
-            let mut up = parent.to_path_buf();
-            for _ in 0..4 {
-                if let Some(parent) = up.parent() {
-                    up = parent.to_path_buf();
-                    candidates.push(up.join("resources"));
-                }
-            }
-        }
-    }
-    candidates
-        .into_iter()
-        .find(|dir| dir.join("models").is_dir())
-        .unwrap_or_else(|| PathBuf::from("resources"))
-}
 
 /// 配置目录，与主程序的 `app_config_dir()` 一致（settings.json 所在位置）。
 fn config_dir() -> PathBuf {
@@ -83,68 +59,12 @@ fn config_dir() -> PathBuf {
 }
 
 /// 数据目录，与主程序的 `app_data_dir()` 一致（用户自放模型的位置）。
-fn data_dir() -> PathBuf {
-    #[cfg(all(not(target_os = "macos"), not(windows)))]
-    {
-        let home = std::env::var("HOME").ok().map(PathBuf::from).unwrap_or_default();
-        return std::env::var("XDG_DATA_HOME")
-            .ok()
-            .filter(|value| !value.trim().is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| home.join(".local/share"))
-            .join("com.whisperstudio.desktop");
-    }
-    #[cfg(any(target_os = "macos", windows))]
-    {
-        config_dir()
-    }
-}
-
 fn settings_path() -> PathBuf {
     config_dir().join("settings.json")
 }
 
-/// 用户模型目录：放进去的 ggml 模型会被 list_models 自动列出。
-fn user_models_dir() -> PathBuf {
-    data_dir().join("models")
-}
-
 fn is_transcribe_model(name: &str) -> bool {
     name.ends_with(".bin") && !name.to_ascii_lowercase().contains("silero")
-}
-
-/// 模型查找顺序：用户目录优先，其次随包资源目录。
-fn model_search_dirs() -> Vec<PathBuf> {
-    vec![user_models_dir(), resources_dir().join("models")]
-}
-
-fn resolve_model(name: &str) -> Result<PathBuf, String> {
-    if name.trim().is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
-        return Err(format!("非法的模型名：{name}"));
-    }
-    for dir in model_search_dirs() {
-        let path = dir.join(name);
-        if path.is_file() {
-            return Ok(path);
-        }
-    }
-    Err(format!("找不到模型：{name}"))
-}
-
-fn cache_key(path: &Path) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    path.to_string_lossy().hash(&mut hasher);
-    if let Ok(meta) = fs::metadata(path) {
-        meta.len().hash(&mut hasher);
-        if let Ok(modified) = meta.modified() {
-            if let Ok(since) = modified.duration_since(std::time::UNIX_EPOCH) {
-                since.as_secs().hash(&mut hasher);
-            }
-        }
-    }
-    format!("{:016x}", hasher.finish())
 }
 
 fn tool_text(value: Value) -> Value {
@@ -179,19 +99,11 @@ fn opt_bool(args: &Value, key: &str) -> Option<bool> {
     args.get(key).and_then(Value::as_bool)
 }
 
-fn opt_u32(args: &Value, key: &str) -> Option<u32> {
-    args.get(key).and_then(Value::as_u64).map(|value| value as u32)
-}
-
-fn opt_f64(args: &Value, key: &str) -> Option<f64> {
-    args.get(key).and_then(Value::as_f64)
-}
-
 /* ---------------- 转写 ---------------- */
 
 fn list_models() -> Result<Value, String> {
     let mut names = std::collections::BTreeSet::new();
-    for dir in model_search_dirs() {
+    for dir in job::model_search_dirs() {
         let Ok(entries) = fs::read_dir(dir) else {
             continue;
         };
@@ -203,154 +115,7 @@ fn list_models() -> Result<Value, String> {
     }
     Ok(json!({
         "models": names.into_iter().collect::<Vec<String>>(),
-        "user_dir": user_models_dir().display().to_string()
-    }))
-}
-
-fn separate(
-    input: &Path,
-    on_progress: &mut dyn FnMut(u32),
-    on_log: &dyn Fn(&str),
-) -> Result<PathBuf, String> {
-    let cache_dir = std::env::temp_dir().join("whisper-studio-mcp/separated");
-    fs::create_dir_all(&cache_dir).map_err(|e| e.to_string())?;
-    let vocals = cache_dir.join(mdx::cache_file_name(input, "vocals", &cache_key(input)));
-    if vocals.metadata().map(|m| m.len() > 44).unwrap_or(false) {
-        on_log("命中已分离人声缓存，跳过分离");
-        on_progress(100);
-        return Ok(vocals);
-    }
-    on_log(&format!("开始人声分离：{}", input.display()));
-    let root = resources_dir();
-    let model = mdx::model_path(Some(root.as_path()))
-        .ok_or("找不到 MDX 分离模型：resources/models/UVR-MDX-NET-Inst_HQ_3.onnx 缺失")?;
-    let tmp = vocals.with_extension("wav.part");
-    let _ = fs::remove_file(&tmp);
-    mdx::separate_vocals(&model, input, &tmp, on_progress, &|| false)?;
-    fs::rename(&tmp, &vocals).map_err(|e| format!("写入分离缓存失败: {e}"))?;
-    on_log("人声分离完成");
-    on_progress(100);
-    Ok(vocals)
-}
-
-struct TranscribeOpts {
-    model: String,
-    language: String,
-    separate: bool,
-    vad: bool,
-    suppress_ns: bool,
-    coreml: bool,
-    no_context: bool,
-    prompt: Option<String>,
-    no_fallback: bool,
-    beam_size: Option<u32>,
-    best_of: Option<u32>,
-    no_speech_thold: Option<f64>,
-    entropy_thold: f64,
-    logprob_thold: Option<f64>,
-    word_thold: Option<f64>,
-    max_len: Option<u32>,
-}
-
-fn transcribe(input: &Path, opts: &TranscribeOpts) -> Result<Value, String> {
-    if !input.exists() {
-        return Err(format!("找不到音频文件: {}", input.display()));
-    }
-    let root = resources_dir();
-    let cli = tools::whisper_cli_path(&root);
-    if !cli.exists() {
-        return Err(format!("找不到 whisper-cli: {}", cli.display()));
-    }
-    let model = resolve_model(&opts.model)?;
-
-    let out_dir = std::env::temp_dir().join("whisper-studio-mcp/output");
-    fs::create_dir_all(&out_dir).map_err(|e| e.to_string())?;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-
-    // 进度与日志通过 stderr 带标记回传给任务管理器（stdout 留给 JSON-RPC 结果）。
-    // 分离占 0-60，转写占 60-100，合起来是连续的 0-100。
-    let emit_progress = |p: u32| eprintln!("@@P:{}", p.min(100));
-    let emit_log = |line: &str| {
-        for part in line.lines().filter(|l| !l.trim().is_empty()) {
-            eprintln!("@@L:{}", part);
-        }
-    };
-
-    let mut audio_path = input.to_path_buf();
-    if opts.separate {
-        emit_log("阶段：人声分离");
-        audio_path = separate(
-            input,
-            &mut |p| emit_progress(p * 60 / 100),
-            &|line| emit_log(line),
-        )?;
-    }
-
-    let threads = (std::thread::available_parallelism()
-        .map(|n| n.get())
-        .unwrap_or(8)
-        / 2)
-        .max(1);
-
-    let prompt = opts
-        .prompt
-        .as_deref()
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(str::to_string);
-
-    let engine_opts = engine::Options {
-        cli: cli.clone(),
-        model: model.clone(),
-        vad_model: if opts.vad {
-            let path = root.join("models").join("ggml-silero-v5.1.2.bin");
-            path.exists().then_some(path)
-        } else {
-            None
-        },
-        language: opts.language.clone(),
-        threads: threads as i32,
-        suppress_ns: opts.suppress_ns,
-        vad: opts.vad,
-        coreml: opts.coreml,
-        // 与桌面端一致：-mc 0 与初始提示互斥，有提示时不用它。
-        no_context: opts.no_context && prompt.is_none(),
-        prompt,
-        entropy_thold: opts.entropy_thold,
-        no_fallback: opts.no_fallback,
-        beam_size: opts.beam_size,
-        best_of: opts.best_of,
-        no_speech_thold: opts.no_speech_thold,
-        logprob_thold: opts.logprob_thold,
-        word_thold: opts.word_thold,
-        max_len: opts.max_len,
-        chunk_ms: 30_000,
-    };
-    emit_log(&format!("阶段：转写（模型 {}，语言 {}）", opts.model, opts.language));
-    let output = engine::run(
-        &audio_path,
-        &out_dir,
-        stamp,
-        &engine_opts,
-        &mut |p| emit_progress(60 + p * 40 / 100),
-        &mut |line| emit_log(line),
-        &|| false,
-    )?;
-    emit_log(&format!("转写完成，共 {} 字", output.text.trim().chars().count()));
-    if output.text.trim().is_empty() {
-        return Err(if opts.vad {
-            "没有检测到语音（纯音乐或静音片段已被跳过）".into()
-        } else {
-            "没有识别到任何内容".into()
-        });
-    }
-    Ok(json!({
-        "text": output.text.trim(),
-        "srt": output.srt,
-        "audio_used": audio_path.display().to_string()
+        "user_dir": job::user_models_dir().display().to_string()
     }))
 }
 
@@ -662,30 +427,12 @@ fn call_tool(params: &Value) -> Result<Value, String> {
     let result = match name {
         "transcribe_audio" => {
             let input = PathBuf::from(req_str(&args, "input_path")?);
-            let opts = TranscribeOpts {
-                model: opt_str(&args, "model")
-                    .unwrap_or_else(|| "ggml-large-v3-turbo-q5_0.bin".to_string()),
-                language: opt_str(&args, "language").unwrap_or_else(|| "auto".to_string()),
-                separate: opt_bool(&args, "separate").unwrap_or(true),
-                vad: opt_bool(&args, "vad").unwrap_or(false),
-                suppress_ns: opt_bool(&args, "suppress_ns").unwrap_or(true),
-                coreml: opt_bool(&args, "acceleration").unwrap_or(true),
-                no_context: opt_bool(&args, "no_context").unwrap_or(true),
-                prompt: opt_str(&args, "prompt"),
-                no_fallback: opt_bool(&args, "no_fallback").unwrap_or(false),
-                beam_size: opt_u32(&args, "beam_size"),
-                best_of: opt_u32(&args, "best_of"),
-                no_speech_thold: opt_f64(&args, "no_speech_thold"),
-                entropy_thold: opt_f64(&args, "entropy_thold").unwrap_or(2.8),
-                logprob_thold: opt_f64(&args, "logprob_thold"),
-                word_thold: opt_f64(&args, "word_thold"),
-                max_len: opt_u32(&args, "max_len"),
-            };
-            transcribe(&input, &opts).map(tool_text)
+            let opts = job::TranscribeOpts::from_value(&args)?;
+            job::transcribe(&input, &opts).map(tool_text)
         }
         "separate_vocals" => {
             let input = PathBuf::from(req_str(&args, "input_path")?);
-            separate(&input, &mut |_| {}, &|_| {})
+            job::separate(&input, &mut |_| {}, &|_| {})
                 .map(|path| tool_text(json!({ "vocals": path.display().to_string() })))
         }
         "export_transcript" => {
@@ -919,7 +666,7 @@ fn call_tool(params: &Value) -> Result<Value, String> {
 
 fn main() {
     // 定位随包的 ffmpeg / ffprobe，后续媒体与转换工具直接复用。
-    tools::set_resources(resources_dir());
+    tools::set_resources(job::resources_dir());
     // stdout 只能输出协议内容，日志一律走 stderr。
     eprintln!("whisper-studio-mcp 已启动（stdio）");
     let stdin = std::io::stdin();

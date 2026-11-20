@@ -320,26 +320,26 @@ fn try_handle_transcribe(parsed: &Option<serde_json::Value>) -> Option<String> {
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "转写任务".into());
 
-    let job = crate::task_manager::JobParams {
-        input_path,
-        model: get_str("model", "ggml-large-v3-turbo-q5_0.bin"),
-        language: get_str("language", "auto"),
-        separate: get_bool("separate", true),
-        vad: get_bool("vad", false),
-        suppress_ns: get_bool("suppress_ns", true),
-        coreml: get_bool("acceleration", true),
-        no_context: get_bool("no_context", true),
-        prompt: args.get("prompt").and_then(Value::as_str).map(str::to_string),
-        no_fallback: get_bool("no_fallback", false),
-        beam_size: get_num_u("beam_size"),
-        best_of: get_num_u("best_of"),
-        no_speech_thold: get_num_f("no_speech_thold"),
-        entropy_thold: get_num_f("entropy_thold").unwrap_or(2.8),
-        logprob_thold: get_num_f("logprob_thold"),
-        word_thold: get_num_f("word_thold"),
-        max_len: get_num_u("max_len"),
-    };
-    let task_id = crate::task_manager::submit(job, "mcp", title);
+    let params = json!({
+        "input_path": input_path,
+        "model": get_str("model", "ggml-large-v3-turbo-q5_0.bin"),
+        "language": get_str("language", "auto"),
+        "separate": get_bool("separate", true),
+        "vad": get_bool("vad", false),
+        "suppress_ns": get_bool("suppress_ns", true),
+        "coreml": get_bool("acceleration", true),
+        "no_context": get_bool("no_context", true),
+        "prompt": args.get("prompt").and_then(Value::as_str).map(str::to_string),
+        "no_fallback": get_bool("no_fallback", false),
+        "beam_size": get_num_u("beam_size"),
+        "best_of": get_num_u("best_of"),
+        "no_speech_thold": get_num_f("no_speech_thold"),
+        "entropy_thold": get_num_f("entropy_thold").unwrap_or(2.8),
+        "logprob_thold": get_num_f("logprob_thold"),
+        "word_thold": get_num_f("word_thold"),
+        "max_len": get_num_u("max_len"),
+    });
+    let task_id = crate::task_manager::submit("transcribe", params, "mcp", title);
     Some(result_value(json!({
         "task_id": task_id,
         "status": "queued",

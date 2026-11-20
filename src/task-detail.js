@@ -44,6 +44,21 @@ function srtToLrc(srt) {
     .join("\n");
 }
 
+const KIND_KEYS = {
+  transcribe: "task.kind_transcribe",
+  convert: "task.kind_convert",
+  tags: "task.kind_tags",
+  cover: "task.kind_cover",
+  rename: "task.kind_rename",
+  batch_rename: "task.kind_batch_rename",
+};
+
+function kindLabel(kind) {
+  const key = KIND_KEYS[kind] || KIND_KEYS.transcribe;
+  const text = t(key);
+  return text === key ? kind : text;
+}
+
 function displayText() {
   if (!task?.result) {
     if (task?.error) return task.error;
@@ -51,6 +66,7 @@ function displayText() {
       ? t("task.running_progress", { percent: task.progress ?? 0 })
       : t("task.no_content");
   }
+  if (task.kind && task.kind !== "transcribe") return describeResult(task.result);
   if (showTime && task.result.srt) {
     const lrc = srtToLrc(task.result.srt);
     if (lrc) return lrc;
@@ -58,27 +74,46 @@ function displayText() {
   return task.result.text;
 }
 
+// 非转写任务用一段可读的摘要代替正文。
+function describeResult(result) {
+  if (result.renamed !== undefined) {
+    return t("task.result_batch", { n: result.renamed, dir: result.dir || "" });
+  }
+  if (result.name) {
+    return t("task.result_file", { name: result.name, path: result.path || "" });
+  }
+  return JSON.stringify(result, null, 2);
+}
+
 function render() {
   if (!task) return;
   $("detailTitle").textContent = task.title || t("task.detail_title");
+  const kind = task.kind || "transcribe";
+  const isTranscribe = kind === "transcribe";
   const status = statusText(task.status);
-  const lang = task.params.language || "auto";
-  const separate = task.params.separate ? t("task.meta_separate") : t("task.meta_original");
   const source = task.source === "mcp" ? "MCP" : t("tasks.source_gui");
+  const created = t("task.meta_created", { time: fmtTime(task.created_at) });
   const finished = task.finished_at ? t("task.meta_finished", { time: fmtTime(task.finished_at) }) : "";
-  $("detailMeta").innerHTML = `${esc(status)} · ${esc(source)} · ${esc(lang.toUpperCase())} · ${esc(separate)} · ${esc(
-    t("task.meta_created", { time: fmtTime(task.created_at) })
-  )}${esc(finished)}<br>${esc(t("task.meta_input"))}${esc(task.params.input_path)}`;
+  let meta = `${esc(status)} · ${esc(source)} · ${esc(kindLabel(kind))} · ${esc(created)}${esc(finished)}`;
+  if (isTranscribe) {
+    const lang = task.params?.language || "auto";
+    const separate = task.params?.separate ? t("task.meta_separate") : t("task.meta_original");
+    meta += ` · ${esc(lang.toUpperCase())} · ${esc(separate)}`;
+  }
+  const input = task.params?.input_path || task.params?.path || task.params?.dir || "";
+  if (input) meta += `<br>${esc(t("task.meta_input"))}${esc(input)}`;
+  $("detailMeta").innerHTML = meta;
   $("detailText").textContent = displayText();
   const logEl = $("detailLog");
   logEl.textContent = task.log || t("task.no_log");
   logEl.scrollTop = logEl.scrollHeight;
+  $("toggleTime").hidden = !isTranscribe;
   $("toggleTime").textContent = showTime ? t("task.show_plain") : t("task.show_time");
-  const hasResult = !!task.result;
-  $("copyText").disabled = !hasResult;
-  $("saveTxt").disabled = !hasResult;
-  $("saveSrt").disabled = !hasResult;
-  $("saveLrc").disabled = !hasResult || !task.result.srt;
+  const hasText = typeof task.result?.text === "string";
+  $("copyText").disabled = !task.result;
+  $("saveTxt").disabled = !hasText;
+  $("saveSrt").disabled = !hasText;
+  $("saveLrc").disabled = !hasText || !task.result.srt;
 }
 
 function esc(s) {

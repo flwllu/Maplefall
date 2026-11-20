@@ -21,6 +21,18 @@ function statusText(status) {
   return text === key ? status : text;
 }
 
+function previewOf(task) {
+  if (task.error) return `<div class="task-err">${esc(task.error)}</div>`;
+  const result = task.result;
+  if (!result) return "";
+  let text = "";
+  if (typeof result.text === "string") text = result.text.slice(0, 80);
+  else if (result.renamed !== undefined) text = t("tasks.preview_batch", { n: result.renamed });
+  else if (result.name) text = result.name;
+  else if (result.path) text = result.path;
+  return text ? `<div class="task-preview">${esc(text)}</div>` : "";
+}
+
 function render() {
   const active = tasks.filter((t) => t.status === "queued" || t.status === "running").length;
   document.title = active ? `${t("tasks.title")} (${active})` : t("tasks.title");
@@ -31,11 +43,7 @@ function render() {
     .map((task) => {
       const status = statusText(task.status);
       const canCancel = task.status === "queued" || task.status === "running";
-      const preview = task.error
-        ? `<div class="task-err">${esc(task.error)}</div>`
-        : task.result
-          ? `<div class="task-preview">${esc(task.result.text.slice(0, 80))}</div>`
-          : "";
+      const preview = previewOf(task);
       const source = task.source === "mcp" ? "MCP" : t("tasks.source_gui");
       return `<div class="task-item" data-id="${esc(task.id)}" title="${esc(t("tasks.open_tip"))}">
         <div class="task-row">

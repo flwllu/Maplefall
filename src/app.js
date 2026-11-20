@@ -44,6 +44,30 @@ function setStatus(text, kind = "") {
   node.className = `status ${kind}`;
 }
 
+/* 所有会改动文件的操作都提交到后台任务队列，界面只负责提交与清空。 */
+
+let toastTimer = null;
+function notifySubmitted() {
+  const node = $("submitToast");
+  if (!node) return;
+  node.innerHTML = `<b>${escapeHtml(tr("status.submitted"))}</b>`;
+  node.hidden = false;
+  requestAnimationFrame(() => node.classList.add("show"));
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    node.classList.remove("show");
+    setTimeout(() => {
+      node.hidden = true;
+    }, 200);
+  }, 4000);
+}
+
+async function submitTask(kind, params, title, source = "gui") {
+  await invoke("submit_task", { kind, params, source, title });
+  notifySubmitted();
+  refreshTaskBadge();
+}
+
 const IS_MAC = /Mac/i.test(navigator.userAgent);
 
 /**
@@ -640,11 +664,7 @@ el.run.addEventListener("click", async () => {
     max_len: adv.max_len,
   };
   try {
-    await invoke("submit_task", {
-      params,
-      source: "gui",
-      title: baseName(audioPath),
-    });
+    await submitTask("transcribe", params, baseName(audioPath));
     resetMainPage();
     setStatus(tr("status.submitted"), "ok");
   } catch (error) {
@@ -803,18 +823,37 @@ $("editorReload").addEventListener("click", async () => {
   setStatus(tr("status.reloaded"), "ok");
 });
 
+// 提交后把编辑页还原到初始状态，结果去任务窗口看。
+function resetEditorPage() {
+  editorPath = null;
+  $("editorPath").textContent = tr("common.no_file");
+  for (const node of Object.values(tagFields)) node.value = "";
+  $("lyricsText").value = "";
+  $("renameInput").value = "";
+  $("infoGrid").innerHTML = `<p class="adv-tip">${escapeHtml(tr("editor.raw_empty"))}</p>`;
+  $("coverImg").hidden = true;
+  $("coverImg").removeAttribute("src");
+  $("coverEmpty").hidden = false;
+  $("coverEmpty").textContent = tr("editor.cover_empty");
+  $("tagsSave").disabled = true;
+  $("coverRemove").disabled = true;
+  $("renameDo").disabled = true;
+  $("renameFromTag").disabled = true;
+  $("editorReload").disabled = true;
+  for (const id of ["lyricsText", "lyricsImport", "lyricsClear", "lyricsSave"]) $(id).disabled = true;
+}
+
 async function saveTags() {
   if (!editorPath) return;
   const tags = {};
   for (const [key, node] of Object.entries(tagFields)) tags[key] = node.value.trim();
   tags.lyrics = $("lyricsText").value.trimEnd();
-  setStatus(tr("status.writing_tags"), "busy");
   try {
-    await invoke("media_write_tags", { path: editorPath, tags });
-    await refreshEditor();
-    setStatus(tr("status.tags_saved"), "ok");
+    await submitTask("tags", { path: editorPath, tags }, baseName(editorPath));
+    resetEditorPage();
+    setStatus(tr("status.submitted"), "ok");
   } catch (error) {
-    setStatus(tr("status.save_failed", { error }), "err");
+    setStatus(tr("status.submit_failed", { error }), "err");
   }
 }
 
@@ -852,25 +891,25 @@ $("coverChoose").addEventListener("click", async () => {
     filters: [{ name: tr("editor.image_file"), extensions: ["jpg", "jpeg", "png", "bmp", "webp"] }],
   });
   if (!image) return;
-  setStatus(tr("status.writing_cover"), "busy");
+  const path = editorPath;
   try {
-    await invoke("media_set_cover", { path: editorPath, image });
-    await refreshEditor();
-    setStatus(tr("status.cover_written"), "ok");
+    await submitTask("cover", { action: "set", path, image }, baseName(path));
+    resetEditorPage();
+    setStatus(tr("status.submitted"), "ok");
   } catch (error) {
-    setStatus(tr("status.cover_write_failed", { error }), "err");
+    setStatus(tr("status.submit_failed", { error }), "err");
   }
 });
 
 $("coverRemove").addEventListener("click", async () => {
   if (!editorPath) return;
-  setStatus(tr("status.removing_cover"), "busy");
+  const path = editorPath;
   try {
-    await invoke("media_remove_cover", { path: editorPath });
-    await refreshEditor();
-    setStatus(tr("status.cover_removed"), "ok");
+    await submitTask("cover", { action: "remove", path }, baseName(path));
+    resetEditorPage();
+    setStatus(tr("status.submitted"), "ok");
   } catch (error) {
-    setStatus(tr("status.cover_remove_failed", { error }), "err");
+    setStatus(tr("status.submit_failed", { error }), "err");
   }
 });
 
@@ -894,14 +933,13 @@ $("renameDo").addEventListener("click", async () => {
   if (!editorPath) return;
   const name = $("renameInput").value.trim();
   if (!name) return;
+  const path = editorPath;
   try {
-    const next = await invoke("media_rename", { path: editorPath, filename: name });
-    editorPath = next;
-    $("editorPath").textContent = next;
-    await refreshEditor();
-    setStatus(tr("status.renamed", { name: baseName(next) }), "ok");
+    await submitTask("rename", { path, filename: name }, baseName(path));
+    resetEditorPage();
+    setStatus(tr("status.submitted"), "ok");
   } catch (error) {
-    setStatus(tr("status.rename_failed", { error }), "err");
+    setStatus(tr("status.submit_failed", { error }), "err");
   }
 });
 
@@ -944,32 +982,26 @@ $("batchPick").addEventListener("click", async () => {
 
 $("batchPattern").addEventListener("change", renderBatch);
 
+function resetBatchPage() {
+  batchItems = [];
+  $("batchPath").textContent = tr("common.no_folder");
+  $("batchPattern").value = "artist_title";
+  $("batchList").innerHTML = `<p class="adv-tip">${escapeHtml(tr("batch.empty"))}</p>`;
+  $("batchDo").disabled = true;
+}
+
 $("batchDo").addEventListener("click", async () => {
   if (!batchItems.length) return;
+  const dir = $("batchPath").textContent;
   const pattern = $("batchPattern").value;
-  let done = 0;
-  let skipped = 0;
-  for (const item of batchItems) {
-    const tags = item.info?.tags || {};
-    const target = buildName(tags.title, tags.artist, pattern);
-    if (!target) {
-      skipped += 1;
-      continue;
-    }
-    try {
-      const next = await invoke("media_rename", { path: item.path, filename: target });
-      item.path = next;
-      item.name = baseName(next);
-      done += 1;
-    } catch (_) {
-      skipped += 1;
-    }
-  }
-  setStatus(tr("status.batch_done", { done, skipped }), "ok");
+  const title = tr("batch.task_title", { name: baseName(dir), n: batchItems.length });
   try {
-    batchItems = await invoke("media_scan_folder", { dir: $("batchPath").textContent });
-    renderBatch();
-  } catch (_) {}
+    await submitTask("batch_rename", { dir, pattern }, title);
+    resetBatchPage();
+    setStatus(tr("status.submitted"), "ok");
+  } catch (error) {
+    setStatus(tr("status.submit_failed", { error }), "err");
+  }
 });
 
 /* ---------------- 格式转换 ---------------- */
@@ -978,7 +1010,6 @@ let convertInput = null;
 let convertAudioFile = null; // 「替换音轨」导入的音频
 let convertOutputFile = null; // 「另存为…」指定的完整路径，优先级最高
 let convertOutDir = null; // 输出文件夹，文件名自动生成
-let converting = false;
 let ffcaps = null;
 let convertPresets = [];
 
@@ -1597,12 +1628,24 @@ function collectConvertArgs(output) {
   };
 }
 
-$("convertRun").addEventListener("click", async () => {
-  if (converting) {
-    await invoke("cancel_convert");
-    setStatus(tr("status.converting_cancel"), "busy");
-    return;
+// 提交后把转换页还原到初始状态，进度与结果去任务窗口看。
+function resetConvertPage() {
+  convertInput = null;
+  convertOutputFile = null;
+  convertOutDir = null;
+  $("convertPath").textContent = tr("common.no_file");
+  $("convertPreset").selectedIndex = 0;
+  resetConvertForm();
+  syncConvertControls();
+  for (const id of ["convertVideoStream", "convertAudioStream"]) {
+    setOptions(id, [{ value: "", key: "common.auto", label: tr("common.auto") }]);
   }
+  $("convertBar").style.width = "0%";
+  $("convertPct").textContent = "0%";
+  refreshOutputLabel();
+}
+
+$("convertRun").addEventListener("click", async () => {
   if (!convertInput) {
     setStatus(tr("convert.pick_src_first"), "err");
     return;
@@ -1636,29 +1679,13 @@ $("convertRun").addEventListener("click", async () => {
       return;
     }
   }
-  converting = true;
-  $("convertRun").textContent = tr("convert.cancel");
-  $("convertBar").style.width = "0%";
-  $("convertPct").textContent = "0%";
-  setStatus(tr("convert.converting"), "busy");
+  const title = `${baseName(convertInput)} → ${baseName(output)}`;
   try {
-    await invoke("convert_media", { args: collectConvertArgs(output) });
-    $("convertOut").textContent = output;
-    setStatus(tr("convert.done", { name: baseName(output) }), "ok");
+    await submitTask("convert", collectConvertArgs(output), title);
+    resetConvertPage();
+    setStatus(tr("status.submitted"), "ok");
   } catch (error) {
-    if (String(error).includes("已取消")) setStatus(tr("convert.cancelled"));
-    else setStatus(tr("convert.failed", { error }), "err");
-  } finally {
-    converting = false;
-    $("convertRun").textContent = tr("convert.run");
-  }
-});
-
-listen("convert-progress", (event) => {
-  const { percent } = event.payload ?? {};
-  if (typeof percent === "number") {
-    $("convertBar").style.width = `${percent}%`;
-    $("convertPct").textContent = `${percent.toFixed(0)}%`;
+    setStatus(tr("status.submit_failed", { error }), "err");
   }
 });
 
