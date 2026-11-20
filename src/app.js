@@ -1093,7 +1093,6 @@ function resetConvertForm() {
   for (const id of CONVERT_CHECK_IDS) $(id).checked = false;
   $("convertOverwrite").checked = true;
   $("convertReplaceAudio").checked = false;
-  $("convertPickAudio").disabled = true;
   $("convertAudioPath").textContent = tr("convert.replace_audio_none");
   convertAudioFile = null;
 }
@@ -1518,9 +1517,7 @@ $("convertPick").addEventListener("click", async () => {
 });
 
 $("convertReplaceAudio").addEventListener("change", () => {
-  const on = $("convertReplaceAudio").checked;
-  $("convertPickAudio").disabled = !on;
-  if (!on) {
+  if (!$("convertReplaceAudio").checked) {
     convertAudioFile = null;
     $("convertAudioPath").textContent = tr("convert.replace_audio_none");
   }
@@ -1531,6 +1528,8 @@ $("convertPickAudio").addEventListener("click", async () => {
   if (!picked) return;
   if (!(await checkMedia(picked, "audio"))) return;
   convertAudioFile = picked;
+  // 选到文件就自动启用，省得还要先勾一次「启用」。
+  $("convertReplaceAudio").checked = true;
   $("convertAudioPath").textContent = picked;
 });
 
